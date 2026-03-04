@@ -12,8 +12,8 @@ if not os.path.exists(output_dir):
 
 # 1. Параметры сигналов
 fs = 44100
-N_plot = 2048           # Для графиков (быстрый расчет)
-duration_audio = 5      # 5 секунд для аудио
+N_plot = 2048       
+duration_audio = 5  
 N_audio = fs * duration_audio
 
 # Временные оси
@@ -46,7 +46,6 @@ def save_wav(filename, data, rate):
 
 path_x = save_wav("SigX.wav", x_long, fs)
 path_y = save_wav("SigY.wav", y_long, fs)
-print(f"Аудио сохранено в: {output_dir}")
 
 # 3. Свои реализации алгоритмов
 def my_dft(x):
@@ -101,47 +100,58 @@ Z_corr_fft = np.fft.fftshift(Z_corr_fft_raw)
 
 # Список всех 24 графиков
 plots_data = [
-    (0, "1. x(t)", t_plot, x),
-    (1, "2. y(t)", t_plot, y),
-    (2, "3. x ДПФ Амплитуда", freq[:N_plot//2], 2*np.abs(X_fft_res[:N_plot//2])/N_plot),
-    (3, "4. x ДПФ Фаза", freq[:N_plot//2], np.angle(X_fft_res[:N_plot//2])),
-    (4, "5. x(t) ОДПФ", t_plot, my_idft(X_fft_res).real),
-    (5, "6. x БПФ Амплитуда", freq[:N_plot//2], 2*np.abs(X_fft_res[:N_plot//2])/N_plot),
-    (6, "7. x БПФ Фаза", freq[:N_plot//2], np.angle(X_fft_res[:N_plot//2])),
-    (7, "8. x(t) ОБПФ", t_plot, my_ifft(X_fft_res).real),
-    (8, "9. y ДПФ Амплитуда", freq[:N_plot//2], 2*np.abs(Y_fft_res[:N_plot//2])/N_plot),
-    (9, "10. y ДПФ Фаза", freq[:N_plot//2], np.angle(Y_fft_res[:N_plot//2])),
-    (10, "11. y(t) ОДПФ", t_plot, my_idft(Y_fft_res).real),
-    (11, "12. y БПФ Амплитуда", freq[:N_plot//2], 2*np.abs(Y_fft_res[:N_plot//2])/N_plot),
-    (12, "13. y БПФ Фаза", freq[:N_plot//2], np.angle(Y_fft_res[:N_plot//2])),
-    (13, "14. y(t) ОБПФ", t_plot, my_ifft(Y_fft_res).real),
-    (14, "15. Свертка (Своя)", None, my_convolution(x, y)),
-    (15, "16. Свертка через БПФ", None, Z_conv_fft),
-    (16, "17. Корреляция (Своя)", None, my_correlation(x, y)),
-    (17, "18. Корр. через БПФ", None, Z_corr_fft[(len(Z_corr_fft)-N_conv)//2:][:N_conv]),
-    (18, "19. x БПФ Amp (Lib)", freq[:N_plot//2], 2*np.abs(fft(x)[:N_plot//2])/N_plot),
-    (19, "20. x БПФ Phase (Lib)", freq[:N_plot//2], np.angle(fft(x)[:N_plot//2])),
-    (20, "21. y БПФ Amp (Lib)", freq[:N_plot//2], 2*np.abs(fft(y)[:N_plot//2])/N_plot),
-    (21, "22. y БПФ Phase (Lib)", freq[:N_plot//2], np.angle(fft(y)[:N_plot//2])),
-    (22, "23. Свертка (Lib)", None, np.convolve(x, y)),
-    (23, "24. Корреляция (Lib)", None, signal.correlate(x, y))
+    (0, "1. x(t)", t_plot, x, None),
+    (1, "5. x(t) ОДПФ", t_plot, my_idft(X_fft_res).real, None),
+    (2, "8. x(t) ОБПФ", t_plot, my_ifft(X_fft_res).real, None),
+    (3, "15. Свертка", None, my_convolution(x, y), None),
+    (4, "19. x(t) БПФ Амплитудный спектр (Lib)", freq[:N_plot//2], 2*np.abs(fft(x)[:N_plot//2])/N_plot, 1000),
+    (5, "3. x(t) ДПФ Амплитудный спектр", freq[:N_plot//2], 2*np.abs(X_fft_res[:N_plot//2])/N_plot, 1000),
+    (6, "6. x(t) БПФ Амплитудный спектр", freq[:N_plot//2], 2*np.abs(X_fft_res[:N_plot//2])/N_plot, 1000),
+    (7, "16. Свертка через БПФ", None, Z_conv_fft, None),
+    (8, "20. x(t) БПФ Фазовый спектр (Lib)", freq[:N_plot//2], np.angle(fft(x)[:N_plot//2]), 1000),
+    (9, "4. x(t) ДПФ Фазовый спектр", freq[:N_plot//2], np.angle(X_fft_res[:N_plot//2]), 1000),
+    (10, "7. x(t) БПФ Фазовый спектр", freq[:N_plot//2], np.angle(X_fft_res[:N_plot//2]), 1000),
+    (11, "23. Свертка (Lib)", None, np.convolve(x, y), None),
+    
+    (12, "2. y(t)", t_plot, y, None),
+    (13, "11. y(t) ОДПФ", t_plot, my_idft(Y_fft_res).real, None),
+    (14, "14. y(t) ОБПФ", t_plot, my_ifft(Y_fft_res).real, None),
+    (15, "17. Корреляция", None, my_correlation(x, y), None),
+    (16, "21. y(t) БПФ Амплитудный спектр (Lib)", freq[:N_plot//2], 2*np.abs(fft(y)[:N_plot//2])/N_plot, 500),
+    (17, "9. y(t) ДПФ Амплитудный спектр", freq[:N_plot//2], 2*np.abs(Y_fft_res[:N_plot//2])/N_plot, 500),
+    (18, "12. y(t) БПФ Амплитудный спектр", freq[:N_plot//2], 2*np.abs(Y_fft_res[:N_plot//2])/N_plot, 500),
+    (19, "18. Корреляция через БПФ", None, Z_corr_fft[(len(Z_corr_fft)-N_conv)//2:][:N_conv], None),
+    (20, "22. y(t) БПФ Фазовый спектр (Lib)", freq[:N_plot//2], np.angle(fft(y)[:N_plot//2]), 500),
+    (21, "10. y(t) ДПФ Фазовый спектр", freq[:N_plot//2], np.angle(Y_fft_res[:N_plot//2]), 500),
+    (22, "13. y(t) БПФ Фазовый спектр", freq[:N_plot//2], np.angle(Y_fft_res[:N_plot//2]), 500),
+    (23, "24. Корреляция (Lib)", None, signal.correlate(x, y), None)
 ]
 
 # 5. Отрисовка в одном окне
 fig, axes = plt.subplots(6, 4, figsize=(22, 26)) 
 axes = axes.flatten()
 
-for i, title, data_x, data_y in plots_data:
-    if data_x is not None:
-        axes[i].plot(data_x, data_y, color='tab:blue', linewidth=0.7)
+for i, title, data_x, data_y, x_lim in plots_data:
+    
+    if "x(t)" in title:
+        line_color = 'tab:blue'
+    elif "y(t)" in title:
+        line_color = 'tab:red'
     else:
-        axes[i].plot(data_y, color='tab:blue', linewidth=0.7)
+        line_color = 'tab:purple'
+    
+    if data_x is not None:
+        axes[i].plot(data_x, data_y, color=line_color, linewidth=0.7)
+    else:
+        axes[i].plot(data_y, color=line_color, linewidth=0.7)
+    
+    if x_lim is not None:
+        axes[i].set_xlim(0, x_lim)
+    
     axes[i].set_title(title, fontsize=10, pad=8)
     axes[i].grid(True, alpha=0.3)
     axes[i].tick_params(axis='both', labelsize=8) 
     axes[i].locator_params(axis='both', nbins=4)  
 
-plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05, hspace=0.6, wspace=0.3)
-
-print("Все расчеты выполнены. Графики построены.")
+plt.subplots_adjust(left=0.04, right=0.96, top=0.96, bottom=0.04, hspace=0.6, wspace=0.2)
 plt.show()
