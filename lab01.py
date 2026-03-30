@@ -139,21 +139,27 @@ fig, axes = plt.subplots(6, 4, figsize=(22, 26))
 axes = axes.flatten()
 
 for i, title, data_x, data_y, x_lim in plots_data:
-    
-    if "x(t)" in title:
-        line_color = 'tab:blue'
-    elif "y(t)" in title:
-        line_color = 'tab:red'
+    line_color = 'tab:blue' if "x(t)" in title else ('tab:red' if "y(t)" in title else 'tab:purple')
+
+    if "спектр" in title.lower():
+        mask = np.abs(data_y) > 1e-4
+        curr_x = data_x[mask] if data_x is not None else np.arange(len(data_y))[mask]
+        curr_y = data_y[mask]
+
+        markerline, stemlines, baseline = axes[i].stem(curr_x, curr_y, basefmt="k-")
+        plt.setp(markerline, marker='o', markersize=1, color=line_color)
+        plt.setp(stemlines, linewidth=1, color=line_color)
     else:
-        line_color = 'tab:purple'
-    
-    if data_x is not None:
-        axes[i].plot(data_x, data_y, color=line_color, linewidth=0.7)
-    else:
-        axes[i].plot(data_y, color=line_color, linewidth=0.7)
-    
+        if data_x is not None:
+            axes[i].plot(data_x, data_y, color=line_color, linewidth=0.7)
+        else:
+            axes[i].plot(data_y, color=line_color, linewidth=0.7)
+
     if x_lim is not None:
         axes[i].set_xlim(0, x_lim)
+    
+    axes[i].set_title(title, fontsize=10, pad=8)
+    axes[i].grid(True, alpha=0.3)
     
     axes[i].set_title(title, fontsize=10, pad=8)
     axes[i].grid(True, alpha=0.3)
