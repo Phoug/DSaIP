@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/libDF/"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "cargo"
+    directory: "/pyDF/"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "cargo"
+    directory: "/pyDF-data/"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pip"
+    directory: "/DeepFilterNet/"
+    schedule:
+      interval: "daily"

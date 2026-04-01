@@ -1,0 +1,156 @@
+name: publish-DeepFilterNet
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Which tag to deploy as:"
+        required: true
+  push:
+    tags:
+      - "v*[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  build-libdf-wheels:
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python:
+          - version: "3.7"
+            tag: "37"
+            abi: "37m"
+          - version: "3.8"
+            tag: "38"
+            abi: "38"
+          - version: "3.9"
+            tag: "39"
+            abi: "39"
+          - version: "3.10"
+            tag: "310"
+            abi: "310"
+        df_wheel: ["pyDF", "pyDF-data"]
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            container: quay.io/pypa/manylinux_2_24_x86_64:latest
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+        exclude:
+          - os: windows-latest
+            df_wheel: pyDF-data
+          - os: macos-latest
+            df_wheel: pyDF-data
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout DeepFilterNet
+        uses: actions/checkout@v2
+
+      - name: Echo git tag
+        run: |
+          echo "git tag: ${{github.event.head_commit.message}}"
+          echo "DF version:  $(scripts/get_version.sh)"
+          echo "DF_VERSION=$(scripts/get_version.sh)" >> $GITHUB_ENV
+
+      - name: Install HDF5
+        if: matrix.os == 'ubuntu-latest' && matrix.df_wheel == 'pyDF-data'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends libhdf5-dev
+
+      - name: Install Python
+        if: matrix.os != 'ubuntu-latest'
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python.version }}
+      - name: Setup Python manylinux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          ls -l "/opt/python/cp${{ matrix.python.tag }}-cp${{ matrix.python.abi }}/bin/"
+          ls -l /etc/*release
+          echo "/opt/python/cp${{ matrix.python.tag }}-cp${{ matrix.python.abi }}/bin/" >> $GITHUB_PATH
+
+      - name: Install Maturin
+        run: |
+          python -m pip install maturin
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Build wheel unix
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p target/wheels
+          maturin build --release --target=${{ matrix.target }} -m ${{ matrix.df_wheel }}/Cargo.toml -i python${{ matrix.python.version }} -o target/wheels/
+
+      - name: Build wheel windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p target/wheels target/repaired
+          maturin build --release --target=${{ matrix.target }} -m ${{ matrix.df_wheel }}/Cargo.toml -i python.exe -o target/wheels/
+          pip install delvewheel wheel
+          delvewheel repair target/wheels/DeepFilterLib-*.whl -w target/repaired
+          mv target/repaired/* target/wheels/
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: libdf-wheels-${{github.ref_name}}
+          path: target/wheels/
+
+  build-deepfilternet-wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install poetry
+        run: pip install poetry
+      - name: Build wheels
+        run: poetry build -vvv
+        working-directory: DeepFilterNet
+      - uses: actions/upload-artifact@v2
+        with:
+          name: deepfilternet-wheels-${{github.ref_name}}
+          path: DeepFilterNet/dist/
+
+  publish-pypi-wheels:
+    runs-on: ubuntu-18.04
+    needs: [build-libdf-wheels, build-deepfilternet-wheels]
+    steps:
+      - uses: actions/setup-python@v2
+      - name: Get libdf wheels
+        uses: actions/download-artifact@v2
+        with:
+          name: libdf-wheels-${{github.ref_name}}
+          path: libdf-wheels
+      - name: Get deepfilternet wheels
+        uses: actions/download-artifact@v2
+        with:
+          name: deepfilternet-wheels-${{github.ref_name}}
+          path: deepfilternet-wheels
+      - name: Install Maturin
+        run: python -m pip install maturin
+      - name: Publish
+        shell: bash
+        env:
+          USER: ${{ secrets.PYPI_USER }}
+          PW: ${{ secrets.PYPI_PW }}
+        run: |
+          maturin upload -u "$USER" -p "$PW" libdf-wheels/*"$DF_VERSION"*
+          maturin upload -u "$USER" -p "$PW" deepfilternet-wheels/*"$DF_VERSION"*

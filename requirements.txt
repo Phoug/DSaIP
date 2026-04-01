@@ -1,3 +1,21 @@
-numpy
-matplotlib
-scipy
+# Основной движок и нейросеть
+deepfilternet
+deepfilterlib
+
+# Работа со звуком и тензорами
+torch
+torchaudio
+librosa
+soundfile
+
+# Метрики и анализ данных
+pandas
+numpy<2.0
+pesq
+pystoi
+torchmetrics[audio]
+
+# Вспомогательные утилиты
+loguru
+tqdm
+appdirs

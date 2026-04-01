@@ -1,0 +1,53 @@
+name: Rust CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 18 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: 1
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {command: fmt, rust: nightly, args: '--all -- --check', hdf5: false}
+          - {command: clippy, rust: stable, args: '--all-features -- -D warnings', hdf5: true}
+          - {command: test, rust: stable, args: '--all-features -p deep_filter', hdf5: true}
+          - {command: build, rust: stable, args: '-p deep_filter', hdf5: false}
+          - {command: build, rust: stable, args: '--all-features', hdf5: true}
+          - {command: build, rust: nightly, args: '--all-features', hdf5: true}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install Rust (${{matrix.rust}})
+        uses: actions-rs/toolchain@v1
+        with: {profile: minimal, toolchain: '${{matrix.rust}}', override: true, components: 'rustfmt, clippy'}
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v1
+        with:
+          key: ${{ runner.os }}-${{ matrix.command }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+      - name: Install HDF5
+        if: matrix.hdf5 == true
+        run: sudo apt-get install libhdf5-dev
+      - name: Run cargo ${{matrix.command}}
+        uses: actions-rs/cargo@v1
+        with:
+          command: ${{matrix.command}}
+          args: ${{matrix.args}}
+      - uses: actions/upload-artifact@v2
+        if: matrix.command == 'test'
+        with:
+          name: test-artifacts
+          path: out/

@@ -1,0 +1,134 @@
+name: Test DF
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_run:
+    workflows: ["publish-pypi-wheels"]
+    branches: [main]
+    types:
+      - completed
+  schedule:
+    - cron: '0 18 * * 0'
+
+jobs:
+  test-df-output:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9"]
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        is_pr:
+          - ${{ github.event_name == 'pull_request' }}
+        include:
+          - os: "ubuntu-latest"
+        exclude:
+          - os: "macos-latest"
+            is_pr: true  # Run only linux on PR
+          - os: "windows-latest"
+            is_pr: true  # Run only linux on PR
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v2
+      - name: Echo git tag
+        run: |
+          echo "git tag: ${{github.event.head_commit.message}}"
+          echo "git tag: ${{github.event.commits[0].message}}"
+          echo "DF version:  $(scripts/get_version.sh)"
+          echo "DF_VERSION=$(scripts/get_version.sh)" >> $GITHUB_ENV
+      - name: should it be skipped?
+        env:
+          COMMIT_FILTER: '^v[0-9]+.[0-9]+.[0-9]+$'
+        run: |
+          readonly local last_commit_log=$(git log -1 --pretty=format:"%s")
+          echo "last commit log: $last_commit_log"
+          readonly local filter_count=$(echo "$last_commit_log" | grep -E -c "$COMMIT_FILTER" )
+          if ! [[ "$filter_count" -eq 0 ]]; then
+            echo "the last commit log \"$last_commit_log\" contains \"$COMMIT_FILTER\", stopping"
+            exit 78
+          fi
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token: ${{ github.token }}
+      # Soundfile backend for torchaudio
+      - name: Set Extra Dependency Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "EXTRA=-E soundfile" >> $GITHUB_ENV
+
+      # Rust installation
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with: {profile: "minimal", toolchain: "stable"}
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v1
+        with:
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      # Python and poetry install
+      - name: Install Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Load cached Poetry installation
+        if: matrix.os != 'windows-latest'
+        uses: actions/cache@v2
+        with:
+          path: ~/.local
+          key: poetry-${{ runner.os }}-${{ matrix.python }}-1
+      - name: Bootstrap poetry
+        run: |
+          curl -sL https://install.python-poetry.org | python - -y
+      - name: Update PATH
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Update Path for Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: echo "$APPDATA\Python\Scripts" >> $GITHUB_PATH
+      - name: Configure poetry
+        run: poetry config virtualenvs.in-project true
+      - name: Set venv up cache
+        uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            ~/.cache/DeepFilterNet
+            .venv
+            DeepFilterNet/.venv
+          key: venv-${{ runner.os }}-${{ matrix.python }}-${{ hashFiles('**/pyproject.toml') }}
+
+      # Install DeepFilterNet and dependencies
+      - name: Install runtime dependencies and DeepFilterNet
+        working-directory: DeepFilterNet
+        run: |
+          poetry --version
+          poetry install --no-interaction -E eval ${{env.EXTRA}}
+          poetry run poe install-torch-cpu
+
+      # Run tests
+      - name: Run DF Test
+        working-directory: DeepFilterNet
+        run: |
+          poetry run python df/scripts/test_df.py
+      # Test deepFilter executable
+      - name: Test deepFilter script
+        working-directory: DeepFilterNet
+        env:
+          DNS_AUTH_KEY: ${{ secrets.DNS_AUTH_KEY }}
+        run: |
+          mkdir ../out
+          poetry run deepFilter ../assets/noisy_snr0.wav -o ../out
+          poetry run python df/scripts/dnsmos.py ../assets/noisy_snr0.wav -t 2.9511659145355225
+          poetry run python df/scripts/dnsmos.py ../out/noisy_snr0_DeepFilterNet2.wav -t 3.7940118312835693
+      - uses: actions/upload-artifact@v2
+        with:
+          name: enhanced-${{ runner.os }}
+          path: out/*wav
