@@ -12,6 +12,7 @@ env/
 *.swo
 
 files/
+package/
 *.wav
 
 .DS_Store
